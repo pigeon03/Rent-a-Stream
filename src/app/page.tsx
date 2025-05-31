@@ -1,103 +1,89 @@
-import Image from "next/image";
+// src/app/page.tsx
+'use client';
 
-export default function Home() {
+import { useState } from 'react';
+import { ethers } from 'ethers';
+import { useRouter } from 'next/navigation';
+import SubscriptionNFTAbi from '../abis/SubscriptionNFT.json';
+
+export default function HomePage() {
+  const [address, setAddress] = useState<string | null>(null);
+  const router = useRouter();
+  const CONTRACT = process.env.NEXT_PUBLIC_SUBSCRIPTION_NFT_ADDRESS!;
+
+  async function connectAndCheck() {
+    try {
+      const eth = (window as any).ethereum;
+      if (!eth) throw new Error('Please install MetaMask');
+      // 1) ask MetaMask to connect
+      const [acct]: string[] = await eth.request({ method: 'eth_requestAccounts' });
+      setAddress(acct);
+
+      const provider = new ethers.BrowserProvider(eth);
+      const contract = new ethers.Contract(CONTRACT, SubscriptionNFTAbi.abi, provider);
+
+      // 2) how many tokens have ever been minted?
+      const totalBn = await contract.nextTokenId();
+      const total = typeof totalBn.toNumber === 'function'
+        ? totalBn.toNumber()
+        : Number(totalBn);
+
+      const nowEpoch = Math.floor(Date.now() / 1000);
+
+      // 3) loop through each token ID
+      for (let id = 0; id < total; id++) {
+        // 3a) check if caller is the OWNER of an active subscription
+        const onchainOwner: string = await contract.ownerOf(id);
+        if (onchainOwner.toLowerCase() === acct.toLowerCase()) {
+          const isStillValid: boolean = await contract.isValid(id);
+          if (isStillValid) {
+            // owner’s subscription is still active → go to /premium
+            return router.replace('/premium');
+          }
+        }
+
+        // 3b) check if caller is currently the “user” (renter) AND not expired
+        const userAddress: string = await contract.userOf(id);
+        if (userAddress.toLowerCase() === acct.toLowerCase()) {
+          const expiresBn = await contract.userExpires(id);
+          const expiresEpoch =
+            typeof expiresBn.toNumber === 'function'
+              ? expiresBn.toNumber()
+              : Number(expiresBn);
+          if (expiresEpoch > nowEpoch) {
+            // renter slot is still active → go to /premium
+            return router.replace('/premium');
+          }
+        }
+      }
+
+      // 4) if we reach here, neither owner nor renter slot is valid → push /paywall
+      router.replace('/paywall');
+    } catch (err: any) {
+      alert(err.message || 'Connection or on-chain check failed');
+    }
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+    <main style={{ padding: 20, textAlign: 'center' }}>
+      <h1>Demo Web3 Subscription</h1>
+      {address ? (
+        <p>Connected as {address}</p>
+      ) : (
+        <button
+          onClick={connectAndCheck}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 8,
+            background: '#4F46E5',
+            color: '#FFF',
+            fontSize: '1rem',
+            cursor: 'pointer'
+          }}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          Connect Wallet
+        </button>
+      )}
+    </main>
   );
 }
