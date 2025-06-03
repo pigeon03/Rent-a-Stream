@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ethers } from 'ethers';
 import SubscriptionNFTAbi from '../../abis/SubscriptionNFT.json';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function PremiumPage() {
   const router = useRouter();
@@ -20,7 +21,6 @@ export default function PremiumPage() {
         return;
       }
       try {
-        // 1) connect silently (no popup)
         const accounts: string[] = await eth.request({ method: 'eth_accounts' });
         if (accounts.length === 0) {
           router.replace('/');
@@ -30,8 +30,6 @@ export default function PremiumPage() {
 
         const provider = new ethers.BrowserProvider(eth);
         const contract = new ethers.Contract(CONTRACT, SubscriptionNFTAbi.abi, provider);
-
-        // 2) how many tokens have ever been minted?
         const totalBn = await contract.nextTokenId();
         const total = typeof totalBn.toNumber === 'function'
           ? totalBn.toNumber()
@@ -40,7 +38,6 @@ export default function PremiumPage() {
         const nowEpoch = Math.floor(Date.now() / 1000);
 
         for (let id = 0; id < total; id++) {
-          // 2a) if acct is OWNER and subscription still valid:
           const onchainOwner: string = await contract.ownerOf(id);
           if (onchainOwner.toLowerCase() === acct.toLowerCase()) {
             const validSub: boolean = await contract.isValid(id);
@@ -50,7 +47,6 @@ export default function PremiumPage() {
             }
           }
 
-          // 2b) if acct is the current USER (renter) and rental still valid:
           const userAddr: string = await contract.userOf(id);
           if (userAddr.toLowerCase() === acct.toLowerCase()) {
             const expBn = await contract.userExpires(id);
@@ -58,14 +54,12 @@ export default function PremiumPage() {
               ? expBn.toNumber()
               : Number(expBn);
             if (expEpoch > nowEpoch) {
-              // renter is still valid
               setIsAuthorized(true);
               return;
             }
           }
         }
 
-        // 3) no active subscription/rental found
         setIsAuthorized(false);
         router.replace('/');
       } catch (_) {
@@ -77,26 +71,73 @@ export default function PremiumPage() {
     checkAccess();
   }, [router]);
 
-  // While checking on-chain, render nothing
   if (isAuthorized === null) {
     return null;
   }
 
-  return (
-    <main style={{ padding: 20, textAlign: 'center', fontFamily: 'sans-serif' }}>
-      <h1>🔒 Premium Content</h1>
-      <p>This is the locked-up section that only owners or active renters can view.</p>
-      {/* …place your gated UI here… */}
-      <p style={{ marginTop: 32 }}>
-        Now that you have passed the on-chain check, you can add any private text, videos, downloads, etc.
-      </p>
+  const cards = [
+    {
+      title: '🍕 Bitcoin Pizza Day',
+      fact: 'In 2010, someone paid 10,000 BTC for 2 pizzas. That’s over $600 million today!',
+      image: '/seal-pizza.jpg', // or .png, depending on your actual file
+    },
+    {
+      title: '🤐 Lost Coins',
+      fact: 'It’s estimated that 20% of all Bitcoin is lost forever. Always back up your keys!',
+      image: '/seal-secret.jpg', // or .png
+    },
+    {
+      title: '🌎 El Salvador Goes Bitcoin',
+      fact: 'In 2021, El Salvador became the first country to adopt Bitcoin as legal tender.',
+      image: '/seal-elsalvador.png',
+    },
+    {
+      title: '🐋 Crypto Whales',
+      fact: 'A crypto “whale” is someone who holds so much of a coin, they can affect the price just by trading!',
+      image: '/seal-whale.jpg',
+    },
+  ];
 
-      {/* RENT-OUT BUTTON: only a Link, no automatic redirect */}
-      <div style={{ marginTop: 32 }}>
+  return (
+    <main style={{ padding: 20, fontFamily: 'sans-serif', background: '#f9fafb', minHeight: '100vh' }}>
+      <h1 style={{ fontSize: '2rem', textAlign: 'center', marginBottom: 20 }}>✨ Welcome, Premium Subscriber! ✨</h1>
+      <p style={{ textAlign: 'center', marginBottom: 40 }}>Here's your exclusive crypto trivia vault 🔐</p>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: 20
+      }}>
+        {cards.map((card, i) => (
+          <div key={i} style={{
+            background: '#fff',
+            padding: 20,
+            borderRadius: 12,
+            boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+            textAlign: 'center'
+          }}>
+            <Image
+              src={card.image}
+              alt={card.title}
+              width={280}
+              height={180}
+              style={{
+                borderRadius: 10,
+                objectFit: 'cover',
+                marginBottom: 12
+              }}
+            />
+            <h2 style={{ fontSize: '1.1rem', marginBottom: 10 }}>{card.title}</h2>
+            <p style={{ fontSize: '0.95rem' }}>{card.fact}</p>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 50, textAlign: 'center' }}>
         <Link href="/rent">
           <button
             style={{
-              padding: '10px 20px',
+              padding: '12px 24px',
               borderRadius: 8,
               background: '#10B981',
               color: '#fff',
